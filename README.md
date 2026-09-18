@@ -1,12 +1,6 @@
 # xmip-core-transport-peppol
 
-Peppol transport: the `OpenPeppol` transport infrastructure over AS4, with SMP and SML lookup of the far end. A technology of
-[xmip-core-transport](https://github.com/IlleNilsson/xmip-core-transport).
-
-Declared and not yet written; `architecture.toml` carries the maturity. When
-it is written it implements `Transport`, one mechanism at one gate (ADR-0050).
-What it may depend on is `repository-model.md` section 4 and ADR-0044: its
-capability, and no sibling.
+Peppol transport: the OpenPeppol AS4 profile over the as4 technology — one business document in its Standard Business Document Header is one Stream, its participants beside it as `iso6523-actorid-upis::0088:…` identifiers; a Receive Location unwraps what an access point posts, a Send Location wraps a document and resolves the far end from a static table or a given URL. A technology of [xmip-core-transport](https://github.com/IlleNilsson/xmip-core-transport).
 
 ## Toolchain
 
