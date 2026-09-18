@@ -37,7 +37,9 @@ impl Participant {
     /// nothing after the colon.
     pub fn new(value: &str) -> Result<Self> {
         let (icd, id) = value.split_once(':').ok_or_else(|| {
-            protocol_error(format!("a participant with no ICD before its identifier: {value}"))
+            protocol_error(format!(
+                "a participant with no ICD before its identifier: {value}"
+            ))
         })?;
         if icd.len() != 4 || !icd.bytes().all(|byte| byte.is_ascii_digit()) {
             return Err(protocol_error(format!(
@@ -128,7 +130,8 @@ mod tests {
 
     #[test]
     fn a_participant_reads_qualified_or_bare_and_prints_qualified() {
-        let qualified = Participant::parse("iso6523-actorid-upis::0088:7300010000001").expect("read");
+        let qualified =
+            Participant::parse("iso6523-actorid-upis::0088:7300010000001").expect("read");
         let bare = Participant::parse("0088:7300010000001").expect("read");
         assert_eq!(qualified, bare);
         assert_eq!(qualified.icd(), "0088");

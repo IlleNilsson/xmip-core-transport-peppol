@@ -15,9 +15,9 @@ use std::net::TcpListener;
 use std::sync::{Arc, OnceLock};
 
 use as4::Unsigned;
-use transport::Arrived;
 use transport::error::{Result, protocol_error};
 use transport::loopback::{FarEnd, LOOPBACK_TIMEOUT, Loopback};
+use transport::{Arrived, Transport};
 
 use crate::PeppolTransport;
 use crate::participant::Participant;
@@ -32,7 +32,9 @@ impl PeppolTransport {
     /// under the billing process until [`Self::carrying`].
     #[must_use]
     pub fn loopback() -> Self {
-        let me = Participant::new(PARTICIPANT).expect("a well-formed participant");
+        let me = Participant {
+            value: PARTICIPANT.to_string(),
+        };
         Self::new("as4://127.0.0.1:0/as4", me.clone(), me).timing_out_after(LOOPBACK_TIMEOUT)
     }
 
@@ -103,14 +105,15 @@ impl Loopback for PeppolTransport {
 
 /// The path of `endpoint`, `/` where it has none.
 fn path_of(endpoint: &str) -> &str {
-    let rest = endpoint.split_once("://").map_or(endpoint, |(_, rest)| rest);
+    let rest = endpoint
+        .split_once("://")
+        .map_or(endpoint, |(_, rest)| rest);
     rest.find('/').map_or("/", |at| &rest[at..])
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use transport::Transport;
 
     #[test]
     fn the_loopback_carries_a_business_document_whole_and_refuses_what_is_none() {
@@ -119,7 +122,9 @@ mod tests {
         assert!(pair.refuses(probe).is_none());
         assert_eq!(pair.round(probe).expect("round").bytes, probe);
         for (name, bytes) in transport::payload::edge_payloads() {
-            let why = pair.refuses(&bytes).unwrap_or_else(|| panic!("{name} not refused"));
+            let why = pair
+                .refuses(&bytes)
+                .unwrap_or_else(|| panic!("{name} not refused"));
             assert!(why.contains("one XML business document"), "{name}: {why}");
             let error = pair.round(&bytes).expect_err(name);
             assert!(error.message.starts_with("send failed:"), "{name}: {error}");
@@ -136,7 +141,11 @@ mod tests {
     fn the_far_end_is_this_participant_unsigned_and_keeps_the_path() {
         let pair = PeppolTransport::loopback();
         let arrived = pair.round(b"<Order/>").expect("round");
-        assert!(arrived.origin_uri.starts_with("peppol://127.0.0.1:"), "{}", arrived.origin_uri);
+        assert!(
+            arrived.origin_uri.starts_with("peppol://127.0.0.1:"),
+            "{}",
+            arrived.origin_uri
+        );
         assert!(
             arrived
                 .origin_uri

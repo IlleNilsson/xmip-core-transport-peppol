@@ -223,7 +223,9 @@ impl Header {
 /// processing instruction, a doctype.
 pub fn business_document(payload: &[u8]) -> Result<&str> {
     let text = std::str::from_utf8(payload).map_err(|_| {
-        protocol_error("a Peppol payload is one XML business document, and these bytes are not UTF-8")
+        protocol_error(
+            "a Peppol payload is one XML business document, and these bytes are not UTF-8",
+        )
     })?;
     let mut document = text.trim_start_matches('\u{feff}').trim();
     if document.starts_with("<?xml") {
@@ -236,13 +238,32 @@ pub fn business_document(payload: &[u8]) -> Result<&str> {
         && document.starts_with('<')
         && !document.starts_with("<?")
         && !document.starts_with("<!")
-        && document.ends_with('>');
+        && closes(document);
     if !is_element {
         return Err(protocol_error(
             "a Peppol payload is one XML business document, and this is not one",
         ));
     }
     Ok(document)
+}
+
+/// Whether `document`, which opens with an element, ends where that element
+/// does: one empty tag, or the closing tag of the name it opened with.
+fn closes(document: &str) -> bool {
+    let name = document[1..]
+        .split(|c: char| c.is_whitespace() || c == '/' || c == '>')
+        .next()
+        .unwrap_or_default();
+    if name.is_empty() {
+        return false;
+    }
+    let emptied = document.ends_with("/>") && document.matches('<').count() == 1;
+    let closed = document
+        .strip_suffix('>')
+        .map(str::trim_end)
+        .and_then(|rest| rest.strip_suffix(name))
+        .is_some_and(|rest| rest.ends_with("</"));
+    emptied || (closed && document.matches('<').count() > 1)
 }
 
 /// `<Sender>` or `<Receiver>` naming `participant` under its authority.
@@ -267,7 +288,8 @@ fn scope(kind: &str, identifier: &Identifier) -> String {
 fn participant(header: &str, side: &str) -> Result<Participant> {
     let party =
         element(header, side).ok_or_else(|| protocol_error(format!("a header with no {side}")))?;
-    let authority = attribute(party, "Identifier", "Authority").unwrap_or_else(|| SCHEME.to_string());
+    let authority =
+        attribute(party, "Identifier", "Authority").unwrap_or_else(|| SCHEME.to_string());
     if authority != SCHEME {
         return Err(protocol_error(format!(
             "a {side} under {authority}, and Peppol participants are {SCHEME}"
@@ -318,7 +340,7 @@ fn offset(whole: &str, part: &str) -> usize {
 mod tests {
     use super::*;
 
-    fn header() -> Header {
+    fn invoice_header() -> Header {
         Header::new(
             &Participant::new("0088:1").expect("sender"),
             &Participant::new("0192:2").expect("receiver"),
@@ -329,7 +351,7 @@ mod tests {
 
     #[test]
     fn a_business_document_reads_back_off_the_standard_business_document_it_went_in() {
-        let header = header();
+        let header = invoice_header();
         let invoice = b"<Invoice xmlns=\"urn:x\"><ID>A &amp; B</ID></Invoice>";
         let wrapped = header.wrap(invoice).expect("wrapped");
         let text = String::from_utf8(wrapped.clone()).expect("utf-8");
@@ -338,14 +360,16 @@ mod tests {
         assert!(text.contains("<TypeVersion>2.1</TypeVersion>"));
         assert!(text.contains("<Type>Invoice</Type>"));
         assert!(text.contains("<Type>PROCESSID</Type><InstanceIdentifier>urn:fdc:peppol.eu"));
-        assert!(text.ends_with("</StandardBusinessDocumentHeader><Invoice xmlns=\"urn:x\">\
-            <ID>A &amp; B</ID></Invoice></StandardBusinessDocument>"));
+        assert!(text.ends_with(
+            "</StandardBusinessDocumentHeader><Invoice xmlns=\"urn:x\">\
+            <ID>A &amp; B</ID></Invoice></StandardBusinessDocument>"
+        ));
         let (read, document) = Header::unwrap(&wrapped).expect("unwrapped");
         assert_eq!(read, header);
         assert_eq!(document, invoice);
         assert!(header.instance.ends_with("@xmip"));
         assert_eq!(header.created.len(), 20);
-        assert_ne!(header().instance, header.instance);
+        assert_ne!(invoice_header().instance, header.instance);
     }
 
     #[test]
@@ -370,17 +394,28 @@ mod tests {
         assert_eq!(header.created, "2026-09-16T10:00:00Z");
         assert_eq!(header.process, Identifier::process("urn:p"));
         assert_eq!(header.document, Identifier::document("urn:d::D##c::2.1"));
-        assert_eq!(document, b"<Order xmlns=\"urn:o\">\n    <ID>7</ID>\n  </Order>");
+        assert_eq!(
+            document,
+            b"<Order xmlns=\"urn:o\">\n    <ID>7</ID>\n  </Order>"
+        );
         let refused = |sbd: &str| Header::unwrap(sbd.as_bytes()).expect_err(sbd).message;
         assert!(refused("<Order/>").contains("no StandardBusinessDocument"));
-        assert!(refused("<StandardBusinessDocument><Order/></StandardBusinessDocument>")
-            .contains("no header"));
-        assert!(refused(&theirs.replace("<Order xmlns=\"urn:o\">\n    <ID>7</ID>\n  </Order>", ""))
-            .contains("no business document after"));
-        assert!(refused(&theirs.replace("<sh:Type>DOCUMENTID</sh:Type>", "")).contains("DOCUMENTID"));
+        assert!(
+            refused("<StandardBusinessDocument><Order/></StandardBusinessDocument>")
+                .contains("no header")
+        );
+        assert!(
+            refused(&theirs.replace("<Order xmlns=\"urn:o\">\n    <ID>7</ID>\n  </Order>", ""))
+                .contains("no business document after")
+        );
+        assert!(
+            refused(&theirs.replace("<sh:Type>DOCUMENTID</sh:Type>", "")).contains("DOCUMENTID")
+        );
         assert!(refused(&theirs.replace("<sh:Type>PROCESSID</sh:Type>", "")).contains("PROCESSID"));
         assert!(refused(&theirs.replace("iso6523-actorid-upis", "gln")).contains("under gln"));
-        assert!(refused(&theirs.replace("<sh:Receiver>", "<sh:Receiver/>")).contains("no Receiver"));
+        assert!(
+            refused(&theirs.replace("<sh:Receiver>", "<sh:Receiver/>")).contains("no Receiver")
+        );
         assert!(refused(&theirs.replace("0088:2", "2")).contains("no ICD"));
         assert!(Header::unwrap(&[0xff, 0xfe]).is_err());
     }
@@ -388,11 +423,20 @@ mod tests {
     #[test]
     fn a_declaration_is_set_aside_and_bytes_that_are_no_document_are_refused() {
         let declared = "\u{feff}<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<probe/>\n";
-        assert_eq!(business_document(declared.as_bytes()).expect("document"), "<probe/>");
-        assert_eq!(business_document(b"<a><b/></a>").expect("document"), "<a><b/></a>");
+        assert_eq!(
+            business_document(declared.as_bytes()).expect("document"),
+            "<probe/>"
+        );
+        assert_eq!(
+            business_document(b"<a><b/></a>").expect("document"),
+            "<a><b/></a>"
+        );
         for (name, bytes) in transport::payload::edge_payloads() {
             let error = business_document(&bytes).expect_err(name);
-            assert!(error.message.starts_with("a Peppol payload is one XML"), "{name}");
+            assert!(
+                error.message.starts_with("a Peppol payload is one XML"),
+                "{name}"
+            );
         }
         assert!(business_document(b"<!doctype html><p>x</p>").is_err());
         assert!(business_document(b"<?xml version=\"1.0\"?><?pi?>").is_err());
@@ -411,7 +455,10 @@ mod tests {
             )
         );
         assert_eq!(Identifier::process("urn:p").parts(), ("urn:p", "", ""));
-        assert_eq!(Identifier::process("urn:p").to_string(), "cenbii-procid-ubl::urn:p");
+        assert_eq!(
+            Identifier::process("urn:p").to_string(),
+            "cenbii-procid-ubl::urn:p"
+        );
         assert!(Identifier::parse("no-colons").is_err());
         assert!(Identifier::parse("::value").is_err());
         assert!(Identifier::parse("scheme::").is_err());
