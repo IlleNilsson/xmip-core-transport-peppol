@@ -118,7 +118,7 @@ mod tests {
     #[test]
     fn the_loopback_carries_a_business_document_whole_and_refuses_what_is_none() {
         let pair = PeppolTransport::loopback();
-        let probe = b"<probe><n>1</n>ping-pong</probe>";
+        let probe = b"<probe><n>1</n>round-trip</probe>";
         assert!(pair.refuses(probe).is_none());
         assert_eq!(pair.round(probe).expect("round").bytes, probe);
         for (name, bytes) in transport::payload::edge_payloads() {
