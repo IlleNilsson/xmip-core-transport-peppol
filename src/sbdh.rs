@@ -19,8 +19,8 @@ use std::fmt;
 
 use as4::UserMessage;
 use as4::envelope::{attribute, element};
+use codec::xml::{escape, unescape};
 use transport::error::{Result, protocol_error};
-use transport::xml::{escape, unescape};
 
 use crate::participant::{Participant, SCHEME};
 
@@ -190,7 +190,7 @@ impl Header {
             ));
         }
         let (mut document_type, mut process) = (None, None);
-        for (kind, identifier) in scopes(element(header, "BusinessScope").unwrap_or_default()) {
+        for (kind, identifier) in scopes(element(header, "BusinessScope").unwrap_or_default())? {
             match kind.as_str() {
                 "DOCUMENTID" => document_type = Some(identifier),
                 "PROCESSID" => process = Some(identifier),
@@ -206,8 +206,8 @@ impl Header {
                     .ok_or_else(|| protocol_error("a header with no DOCUMENTID scope"))?,
                 process: process
                     .ok_or_else(|| protocol_error("a header with no PROCESSID scope"))?,
-                instance: text_of(identification, "InstanceIdentifier"),
-                created: text_of(identification, "CreationDateAndTime"),
+                instance: text_of(identification, "InstanceIdentifier")?,
+                created: text_of(identification, "CreationDateAndTime")?,
             },
             document.as_bytes().to_vec(),
         ))
@@ -289,7 +289,7 @@ fn participant(header: &str, side: &str) -> Result<Participant> {
     let party =
         element(header, side).ok_or_else(|| protocol_error(format!("a header with no {side}")))?;
     let authority =
-        attribute(party, "Identifier", "Authority").unwrap_or_else(|| SCHEME.to_string());
+        attribute(party, "Identifier", "Authority")?.unwrap_or_else(|| SCHEME.to_string());
     if authority != SCHEME {
         return Err(protocol_error(format!(
             "a {side} under {authority}, and Peppol participants are {SCHEME}"
@@ -297,19 +297,20 @@ fn participant(header: &str, side: &str) -> Result<Participant> {
     }
     let value = element(party, "Identifier")
         .map(unescape)
+        .transpose()?
         .ok_or_else(|| protocol_error(format!("a {side} with no Identifier")))?;
     Participant::new(value.trim())
 }
 
 /// Every `Scope` in `xml`: its `Type` and the identifier it names, the
 /// scheme from `Identifier` where one is given.
-fn scopes(xml: &str) -> Vec<(String, Identifier)> {
+fn scopes(xml: &str) -> Result<Vec<(String, Identifier)>> {
     let mut found = Vec::new();
     let mut rest = xml;
     while let Some(scope) = element(rest, "Scope") {
-        let kind = text_of(scope, "Type");
-        let value = text_of(scope, "InstanceIdentifier");
-        let scheme = text_of(scope, "Identifier");
+        let kind = text_of(scope, "Type")?;
+        let value = text_of(scope, "InstanceIdentifier")?;
+        let scheme = text_of(scope, "Identifier")?;
         let scheme = if scheme.is_empty() {
             match kind.as_str() {
                 "PROCESSID" => PROCESS_SCHEME,
@@ -321,14 +322,15 @@ fn scopes(xml: &str) -> Vec<(String, Identifier)> {
         found.push((kind, Identifier::new(scheme, &value)));
         rest = &rest[offset(rest, scope) + scope.len()..];
     }
-    found
+    Ok(found)
 }
 
 /// The text of the first `name` in `xml`, trimmed; empty where none.
-fn text_of(xml: &str, name: &str) -> String {
-    element(xml, name)
+fn text_of(xml: &str, name: &str) -> Result<String> {
+    Ok(element(xml, name)
         .map(|text| unescape(text.trim()))
-        .unwrap_or_default()
+        .transpose()?
+        .unwrap_or_default())
 }
 
 /// Where `part`, a slice of `whole`, begins in it.
