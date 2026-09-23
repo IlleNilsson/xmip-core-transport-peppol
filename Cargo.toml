@@ -26,7 +26,7 @@ path = "src/lib.rs"
 # end are not written yet; a static table or a given URL names it.
 transport = { package = "xmip-core-transport", git = "https://github.com/IlleNilsson/xmip-core-transport", branch = "main" }
 # XML character data, escaped as every reader in the estate unescapes it.
-codec = { package = "xmip-core-codec", git = "https://github.com/IlleNilsson/xmip-core-codec", branch = "main" }
+codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
 as4 = { package = "xmip-core-transport-as4", git = "https://github.com/IlleNilsson/xmip-core-transport-as4", branch = "main" }
 
 [dev-dependencies]
