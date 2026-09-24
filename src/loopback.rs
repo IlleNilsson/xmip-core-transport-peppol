@@ -15,9 +15,10 @@ use std::net::TcpListener;
 use std::sync::{Arc, OnceLock};
 
 use as4::Unsigned;
+use transport::Transport;
 use transport::error::{Result, protocol_error};
+use transport::listening::Listening;
 use transport::loopback::{FarEnd, LOOPBACK_TIMEOUT, Loopback};
-use transport::{Arrived, Transport};
 
 use crate::PeppolTransport;
 use crate::participant::Participant;
@@ -57,24 +58,6 @@ impl PeppolTransport {
 
 /// A bound access point waiting for its one Standard Business Document,
 /// which it receipts and unwraps.
-struct Listening {
-    transport: PeppolTransport,
-    listener: TcpListener,
-    address: String,
-}
-
-impl FarEnd for Listening {
-    fn address(&self) -> &str {
-        &self.address
-    }
-
-    fn take_one(self: Box<Self>) -> Result<Arrived> {
-        self.transport
-            .accept_one(&self.listener)?
-            .ok_or_else(|| protocol_error("a document seen before: receipted, not delivered"))
-    }
-}
-
 impl Loopback for PeppolTransport {
     fn refuses(&self, payload: &[u8]) -> Option<String> {
         match business_document(payload) {
@@ -87,14 +70,19 @@ impl Loopback for PeppolTransport {
         }
     }
 
+    /// A bound access point waiting for its one Standard Business
+    /// Document, which it receipts and unwraps.
     fn far_end(&self) -> Result<Box<dyn FarEnd>> {
         let transport = self.twin(self.endpoint.clone());
-        let (listener, address) = transport.bind()?;
-        Ok(Box::new(Listening {
-            transport,
-            listener,
-            address,
-        }))
+        let bound = transport.bind()?;
+        Ok(Box::new(Listening::new(
+            move |listener: &TcpListener| {
+                transport.accept_one(listener)?.ok_or_else(|| {
+                    protocol_error("a document seen before: receipted, not delivered")
+                })
+            },
+            bound,
+        )))
     }
 
     fn send_to(&self, address: &str, payload: &[u8]) -> Result<()> {
