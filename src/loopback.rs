@@ -15,6 +15,7 @@ use std::net::TcpListener;
 use std::sync::{Arc, OnceLock};
 
 use as4::Unsigned;
+use net::Endpoint;
 use transport::Transport;
 use transport::error::{Result, protocol_error};
 use transport::listening::Listening;
@@ -86,17 +87,10 @@ impl Loopback for PeppolTransport {
     }
 
     fn send_to(&self, address: &str, payload: &[u8]) -> Result<()> {
-        self.twin(format!("as4://{address}{}", path_of(&self.endpoint)))
+        let endpoint = Endpoint::parse(&as4::as_http(&self.endpoint))?;
+        self.twin(format!("as4://{address}{}", endpoint.path()))
             .send("", payload)
     }
-}
-
-/// The path of `endpoint`, `/` where it has none.
-fn path_of(endpoint: &str) -> &str {
-    let rest = endpoint
-        .split_once("://")
-        .map_or(endpoint, |(_, rest)| rest);
-    rest.find('/').map_or("/", |at| &rest[at..])
 }
 
 #[cfg(test)]
@@ -143,9 +137,5 @@ mod tests {
         );
         assert_eq!(pair.name(), "peppol");
         assert_eq!(pair.me().value, PARTICIPANT);
-        assert_eq!(path_of("as4://127.0.0.1:0/as4"), "/as4");
-        assert_eq!(path_of("https://ap.example/peppol/as4"), "/peppol/as4");
-        assert_eq!(path_of("as4://127.0.0.1:0"), "/");
-        assert_eq!(path_of("host:1/x"), "/x");
     }
 }

@@ -28,6 +28,8 @@ transport = { package = "xmip-core-transport", git = "https://github.com/IlleNil
 # XML character data, escaped as every reader in the estate unescapes it.
 codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
 as4 = { package = "xmip-core-transport-as4", git = "https://github.com/IlleNilsson/xmip-core-transport-as4", branch = "main" }
+# The URL an access point is (`net::Endpoint`), read once for the estate.
+net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main" }
 
 [dev-dependencies]
 # The loopback payloads the tests drive, from the capability's test
