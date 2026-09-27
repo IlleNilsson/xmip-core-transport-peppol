@@ -149,6 +149,15 @@ impl PeppolTransport {
         self.inbox().bind()
     }
 
+    /// Bind the listener every receive takes from now, where no receive
+    /// has, and say where it is.
+    ///
+    /// # Errors
+    /// Where the address is taken, malformed, or not permitted.
+    pub fn listening(&self) -> Result<&str> {
+        self.inbox().listening()
+    }
+
     /// Accept one Standard Business Document on an already-bound listener,
     /// receipt it and unwrap it; `None` where it was one seen before,
     /// receipted again and not delivered again.
@@ -159,7 +168,14 @@ impl PeppolTransport {
     /// so — or what it carried is no Standard Business Document for this
     /// participant.
     pub fn accept_one(&self, listener: &TcpListener) -> Result<Option<Arrived>> {
-        let Some((_, posted)) = self.inbox().accept_one(listener)? else {
+        self.delivered(self.inbox().accept_one(listener)?)
+    }
+
+    /// The Standard Business Document an AS4 message carried, unwrapped,
+    /// where it is one for this participant; `None` where the access point
+    /// had seen the message before.
+    fn delivered(&self, received: Option<(UserMessage, Arrived)>) -> Result<Option<Arrived>> {
+        let Some((_, posted)) = received else {
             return Ok(None);
         };
         let (header, document) = Header::unwrap(&posted.bytes)?;
@@ -289,9 +305,12 @@ impl Transport for PeppolTransport {
         Directions::BOTH
     }
 
+    /// The next document from whichever access point posts first, on the
+    /// listener this participant's access point bound on the first receive
+    /// and kept.
     fn receive(&self) -> Result<Vec<Arrived>> {
-        let (listener, _) = self.bind()?;
-        Ok(self.accept_one(&listener)?.into_iter().collect())
+        let received = self.inbox().take_next()?;
+        Ok(self.delivered(received)?.into_iter().collect())
     }
 
     fn send(&self, target: &str, bytes: &[u8]) -> Result<()> {
@@ -323,6 +342,30 @@ mod tests {
         .timing_out_after(secs(2));
         let (listener, address) = seller.bind().expect("binding");
         (seller, listener, address)
+    }
+
+    #[test]
+    fn every_receive_takes_from_the_listener_the_first_bound() {
+        let (seller, _, _) = seller();
+        let address = seller.listening().expect("bound").to_string();
+        let buyer = std::thread::spawn(move || {
+            let buyer = PeppolTransport::new(
+                format!("as4://{address}/as4"),
+                participant("0088:1"),
+                participant("0192:2"),
+            )
+            .timing_out_after(secs(2));
+            for round in 0..5 {
+                let invoice = format!("<Invoice><ID>{round}</ID></Invoice>");
+                buyer.send("", invoice.as_bytes()).expect("sent");
+            }
+        });
+        for round in 0..5 {
+            let arrived = seller.receive().expect("received");
+            let invoice = format!("<Invoice><ID>{round}</ID></Invoice>");
+            assert_eq!(arrived[0].bytes, invoice.as_bytes());
+        }
+        buyer.join().expect("buyer");
     }
 
     #[test]
