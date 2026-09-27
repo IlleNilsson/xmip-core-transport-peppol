@@ -35,6 +35,7 @@
 mod loopback;
 pub mod participant;
 pub mod sbdh;
+mod settings;
 
 use std::net::TcpListener;
 use std::sync::{Arc, OnceLock};
