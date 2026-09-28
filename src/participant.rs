@@ -75,7 +75,8 @@ impl Participant {
     /// The four-digit International Code Designator: who issued the
     /// identifier.
     #[must_use]
-    pub fn icd(&self) -> &str {
+    #[cfg(test)]
+    fn icd(&self) -> &str {
         self.value.split(':').next().unwrap_or_default()
     }
 }

@@ -4,6 +4,8 @@ Peppol transport: the OpenPeppol AS4 profile over the as4 technology — one bus
 
 A Receive Location keeps its listener, bound on the first receive, and the connections senders keep open on it (`http::inbound::Inbound`): each receive takes the next request from whichever sends first, where until 2026-09-27 each receive bound a listener of its own, answered one request with `Connection: close`, and refused a request that came between two receives.
 
+An access point written `as4://` is read under AS4's declared schemes (`as4::SCHEMES`) by `net::Endpoint`; until 2026-09-28 it was rewritten by AS4's `as_http` first.
+
 ## Toolchain
 
 `rust-toolchain.toml` pins the toolchain for the whole estate. Do not change it
