@@ -7,8 +7,8 @@
 //! child is the business document itself — a UBL Invoice, an Order — so
 //! what an access point posts is one XML document with the header first,
 //! and what a Receive Location hands up is the document alone. Written by
-//! hand and read by scanning for local names through the as4 technology's
-//! reader, so a partner's prefix — none, `sh:`, `ns0:` — does not matter.
+//! hand and read with the estate's flat scan (`codec::xml`), by local name,
+//! so a partner's prefix — none, `sh:`, `ns0:` — does not matter.
 //!
 //! A document type identifier is `busdox-docid-qns::{root namespace}::
 //! {local name}##{customization}::{version}`, and the header's `Standard`,
@@ -18,18 +18,17 @@
 use std::fmt;
 
 use as4::UserMessage;
-use as4::envelope::{attribute, element};
-use codec::xml::{escape, unescape};
+use codec::xml::{attribute, content, elements, escape, unescape};
 use transport::error::{Result, protocol_error};
 
 use crate::participant::{Participant, SCHEME};
 
 /// The SBDH namespace.
-pub const NAMESPACE: &str = "http://www.unece.org/cefact/namespaces/StandardBusinessDocumentHeader";
+const NAMESPACE: &str = "http://www.unece.org/cefact/namespaces/StandardBusinessDocumentHeader";
 /// The scheme a document type identifier is under.
-pub const DOCUMENT_SCHEME: &str = "busdox-docid-qns";
+const DOCUMENT_SCHEME: &str = "busdox-docid-qns";
 /// The scheme a process identifier is under.
-pub const PROCESS_SCHEME: &str = "cenbii-procid-ubl";
+const PROCESS_SCHEME: &str = "cenbii-procid-ubl";
 
 /// One Peppol identifier that is not a participant: a scheme, two colons,
 /// a value — a document type or a process.
@@ -175,9 +174,9 @@ impl Header {
     pub fn unwrap(bytes: &[u8]) -> Result<(Self, Vec<u8>)> {
         let text = std::str::from_utf8(bytes)
             .map_err(|_| protocol_error("a Standard Business Document that is not UTF-8"))?;
-        let root = element(text, "StandardBusinessDocument")
+        let root = content(text, "StandardBusinessDocument")
             .ok_or_else(|| protocol_error("no StandardBusinessDocument in what arrived"))?;
-        let header = element(root, "StandardBusinessDocumentHeader")
+        let header = content(root, "StandardBusinessDocumentHeader")
             .ok_or_else(|| protocol_error("a StandardBusinessDocument with no header"))?;
         let after_header = offset(root, header) + header.len();
         let closing = root[after_header..]
@@ -190,14 +189,14 @@ impl Header {
             ));
         }
         let (mut document_type, mut process) = (None, None);
-        for (kind, identifier) in scopes(element(header, "BusinessScope").unwrap_or_default())? {
+        for (kind, identifier) in scopes(content(header, "BusinessScope").unwrap_or_default())? {
             match kind.as_str() {
                 "DOCUMENTID" => document_type = Some(identifier),
                 "PROCESSID" => process = Some(identifier),
                 _ => {}
             }
         }
-        let identification = element(header, "DocumentIdentification").unwrap_or_default();
+        let identification = content(header, "DocumentIdentification").unwrap_or_default();
         Ok((
             Self {
                 sender: participant(header, "Sender")?,
@@ -286,8 +285,9 @@ fn scope(kind: &str, identifier: &Identifier) -> String {
 
 /// The participant a `Sender` or `Receiver` element names.
 fn participant(header: &str, side: &str) -> Result<Participant> {
-    let party =
-        element(header, side).ok_or_else(|| protocol_error(format!("a header with no {side}")))?;
+    let party = content(header, side)
+        .filter(|party| !party.trim().is_empty())
+        .ok_or_else(|| protocol_error(format!("a header with no {side}")))?;
     let authority =
         attribute(party, "Identifier", "Authority")?.unwrap_or_else(|| SCHEME.to_string());
     if authority != SCHEME {
@@ -295,9 +295,7 @@ fn participant(header: &str, side: &str) -> Result<Participant> {
             "a {side} under {authority}, and Peppol participants are {SCHEME}"
         )));
     }
-    let value = element(party, "Identifier")
-        .map(unescape)
-        .transpose()?
+    let value = codec::xml::text(party, "Identifier")?
         .ok_or_else(|| protocol_error(format!("a {side} with no Identifier")))?;
     Participant::new(value.trim())
 }
@@ -306,8 +304,8 @@ fn participant(header: &str, side: &str) -> Result<Participant> {
 /// scheme from `Identifier` where one is given.
 fn scopes(xml: &str) -> Result<Vec<(String, Identifier)>> {
     let mut found = Vec::new();
-    let mut rest = xml;
-    while let Some(scope) = element(rest, "Scope") {
+    for scope in elements(xml, "Scope") {
+        let scope = scope.content();
         let kind = text_of(scope, "Type")?;
         let value = text_of(scope, "InstanceIdentifier")?;
         let scheme = text_of(scope, "Identifier")?;
@@ -320,14 +318,13 @@ fn scopes(xml: &str) -> Result<Vec<(String, Identifier)>> {
             scheme.as_str()
         };
         found.push((kind, Identifier::new(scheme, &value)));
-        rest = &rest[offset(rest, scope) + scope.len()..];
     }
     Ok(found)
 }
 
 /// The text of the first `name` in `xml`, trimmed; empty where none.
 fn text_of(xml: &str, name: &str) -> Result<String> {
-    Ok(element(xml, name)
+    Ok(content(xml, name)
         .map(|text| unescape(text.trim()))
         .transpose()?
         .unwrap_or_default())

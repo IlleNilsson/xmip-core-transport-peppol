@@ -87,7 +87,7 @@ impl Loopback for PeppolTransport {
     }
 
     fn send_to(&self, address: &str, payload: &[u8]) -> Result<()> {
-        let endpoint = Endpoint::parse(&as4::as_http(&self.endpoint))?;
+        let endpoint = Endpoint::parse_under(&self.endpoint, &as4::SCHEMES)?;
         self.twin(format!("as4://{address}{}", endpoint.path()))
             .send("", payload)
     }

@@ -55,13 +55,13 @@ pub const BILLING_INVOICE: &str = "urn:oasis:names:specification:ubl:schema:xsd:
 /// The Peppol billing process, the one [`BILLING_INVOICE`] belongs to.
 pub const BILLING_PROCESS: &str = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0";
 /// The `type` both AS4 party ids carry: an access point.
-pub const PARTY_TYPE: &str = "urn:fdc:peppol.eu:2017:identifiers:ap";
+const PARTY_TYPE: &str = "urn:fdc:peppol.eu:2017:identifiers:ap";
 /// The agreement every Peppol exchange is under.
-pub const AGREEMENT: &str = "urn:fdc:peppol.eu:2017:agreements:tia:ap_provider";
+const AGREEMENT: &str = "urn:fdc:peppol.eu:2017:agreements:tia:ap_provider";
 /// The message property naming the participant the document is from.
-pub const ORIGINAL_SENDER: &str = "originalSender";
+const ORIGINAL_SENDER: &str = "originalSender";
 /// The message property naming the participant the document is for.
-pub const FINAL_RECIPIENT: &str = "finalRecipient";
+const FINAL_RECIPIENT: &str = "finalRecipient";
 
 pub struct PeppolTransport {
     /// The partner's access point to send to, or the address to listen at.
@@ -109,7 +109,8 @@ impl PeppolTransport {
 
     /// Resolve a participant's access point from `directory`.
     #[must_use]
-    pub fn resolving_from(mut self, directory: Directory) -> Self {
+    #[cfg(test)]
+    fn resolving_from(mut self, directory: Directory) -> Self {
         self.directory = directory;
         self
     }
