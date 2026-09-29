@@ -8,7 +8,7 @@ use xcore::settings::{Applies, Fixed, Kind, Presence, Read, Setting, Settings};
 use crate::{BILLING_INVOICE, BILLING_PROCESS, Identifier, Participant, PeppolTransport};
 
 impl Configured for PeppolTransport {
-    /// The address is the access point: the partner's a Send Location posts
+    /// The address is the access point: the Party's a Send Location posts
     /// to, `https://ap.example/as4` or `as4://host:port/as4`, or the one a
     /// Receive Location listens at.
     const SETTINGS: &'static Settings = &Settings {
@@ -23,7 +23,7 @@ impl Configured for PeppolTransport {
                 applies: Applies::Both,
             },
             Setting {
-                name: "partner",
+                name: "party",
                 kind: Kind::Text,
                 presence: Presence::Required,
                 meaning: "The participant a Send Location sends to when its target names none.",
@@ -55,15 +55,15 @@ impl Configured for PeppolTransport {
     };
 
     /// The signing certificate comes through the Location's credentials,
-    /// never a setting; a Receive Location sends to no partner, so its own
+    /// never a setting; a Receive Location sends to no Party, so its own
     /// participant stands in for one.
     fn configured(address: &str, settings: &Read) -> Result<Self> {
         let me = Participant::parse(settings.text("participant"))?;
-        let partner = match settings.optional_text("partner") {
-            Some(partner) => Participant::parse(partner)?,
+        let party = match settings.optional_text("party") {
+            Some(party) => Participant::parse(party)?,
             None => me.clone(),
         };
-        let transport = Self::new(address, me, partner).carrying(
+        let transport = Self::new(address, me, party).carrying(
             Identifier::document(settings.text("document")),
             Identifier::process(settings.text("process")),
         );
@@ -86,23 +86,19 @@ mod tests {
         let text = |name: &str, value: &str| (name.to_string(), Given::Text(value.to_string()));
         let given = [
             text("participant", "0088:1"),
-            text("partner", "0192:2"),
+            text("party", "0192:2"),
             text("timeout", "2s"),
         ];
         let endpoint = "https://ap.example/as4";
         let built = PeppolTransport::open(endpoint, Applies::Send, &given).expect("built");
         assert_eq!(built.me().value, "0088:1");
-        assert_eq!(built.partner().value, "0192:2");
+        assert_eq!(built.party().value, "0192:2");
         assert_eq!(built.document.value, BILLING_INVOICE);
         assert_eq!(built.process.value, BILLING_PROCESS);
         assert_eq!(built.timeout, Some(Duration::from_secs(2)));
         let Err(refused) = PeppolTransport::open(endpoint, Applies::Receive, &given) else {
-            panic!("partner is a send setting");
+            panic!("party is a send setting");
         };
-        assert!(
-            refused.message.contains("\"partner\""),
-            "{}",
-            refused.message
-        );
+        assert!(refused.message.contains("\"party\""), "{}", refused.message);
     }
 }

@@ -46,7 +46,7 @@ impl PeppolTransport {
         Self {
             endpoint,
             me: self.me.clone(),
-            partner: self.partner.clone(),
+            party: self.party.clone(),
             document: self.document.clone(),
             process: self.process.clone(),
             directory: self.directory.clone(),

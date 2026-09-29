@@ -64,10 +64,10 @@ const ORIGINAL_SENDER: &str = "originalSender";
 const FINAL_RECIPIENT: &str = "finalRecipient";
 
 pub struct PeppolTransport {
-    /// The partner's access point to send to, or the address to listen at.
+    /// The Party's access point to send to, or the address to listen at.
     endpoint: String,
     me: Participant,
-    partner: Participant,
+    party: Participant,
     document: Identifier,
     process: Identifier,
     directory: Directory,
@@ -79,17 +79,17 @@ pub struct PeppolTransport {
 }
 
 impl PeppolTransport {
-    /// Speak as participant `me` to `partner`, whose access point is at
+    /// Speak as participant `me` to `party`, whose access point is at
     /// `endpoint` — `https://ap.example/as4` or `as4://host:port/as4` —
     /// unless the [`Directory`] knows better; invoices under the billing
     /// process until [`Self::carrying`], unsigned until
     /// [`Self::signing_with`].
     #[must_use]
-    pub fn new(endpoint: impl Into<String>, me: Participant, partner: Participant) -> Self {
+    pub fn new(endpoint: impl Into<String>, me: Participant, party: Participant) -> Self {
         Self {
             endpoint: endpoint.into(),
             me,
-            partner,
+            party,
             document: Identifier::document(BILLING_INVOICE),
             process: Identifier::process(BILLING_PROCESS),
             directory: Directory::default(),
@@ -137,11 +137,11 @@ impl PeppolTransport {
 
     /// The participant this transport sends to.
     #[must_use]
-    pub const fn partner(&self) -> &Participant {
-        &self.partner
+    pub const fn party(&self) -> &Participant {
+        &self.party
     }
 
-    /// Bind at the endpoint's authority as the access point partners post
+    /// Bind at the endpoint's authority as the access point Parties post
     /// to, and report the address actually assigned.
     ///
     /// # Errors
@@ -230,19 +230,19 @@ impl PeppolTransport {
         }
     }
 
-    /// Who a target sends to and where: empty is the partner; a URL is the
-    /// partner at that access point; anything else is a participant the
+    /// Who a target sends to and where: empty is the Party; a URL is the
+    /// Party at that access point; anything else is a participant the
     /// directory must know.
     fn resolve(&self, target: &str) -> Result<(Participant, String)> {
         if target.contains("://") {
-            return Ok((self.partner.clone(), target.to_string()));
+            return Ok((self.party.clone(), target.to_string()));
         }
         if target.is_empty() {
             let endpoint = self
                 .directory
-                .endpoint_of(&self.partner)
+                .endpoint_of(&self.party)
                 .unwrap_or(&self.endpoint);
-            return Ok((self.partner.clone(), endpoint.to_string()));
+            return Ok((self.party.clone(), endpoint.to_string()));
         }
         let receiver = Participant::parse(target)?;
         let endpoint = self.directory.endpoint_of(&receiver).ok_or_else(|| {
@@ -403,7 +403,7 @@ mod tests {
         assert_eq!(seller.name(), "peppol");
         assert_eq!(seller.directions(), Directions::BOTH);
         assert!(seller.claims().is_none());
-        assert_eq!(seller.partner().value, "0088:1");
+        assert_eq!(seller.party().value, "0088:1");
     }
 
     #[test]
@@ -429,12 +429,12 @@ mod tests {
             error.message.contains("one XML business document"),
             "{error}"
         );
-        let (partner, endpoint) = buyer.resolve("https://ap.example/as4").expect("a URL");
+        let (party, endpoint) = buyer.resolve("https://ap.example/as4").expect("a URL");
         assert_eq!(
-            (partner.value.as_str(), endpoint.as_str()),
+            (party.value.as_str(), endpoint.as_str()),
             ("0192:2", "https://ap.example/as4")
         );
-        let (_, endpoint) = buyer.resolve("").expect("the partner");
+        let (_, endpoint) = buyer.resolve("").expect("the Party");
         assert_eq!(endpoint, "as4://127.0.0.1:1/as4");
     }
 
@@ -484,7 +484,7 @@ mod tests {
             );
             let wrapped = header.wrap(b"<Invoice/>").expect("wrapped");
             buyer
-                .access_point(&buyer.endpoint, buyer.partner())
+                .access_point(&buyer.endpoint, buyer.party())
                 .send("", &wrapped)
         });
         let error = seller.accept_one(&listener).expect_err("another receiver");
