@@ -8,7 +8,7 @@
 //! what an access point posts is one XML document with the header first,
 //! and what a Receive Location hands up is the document alone. Written by
 //! hand and read with the estate's flat scan (`codec::xml`), by local name,
-//! so a partner's prefix — none, `sh:`, `ns0:` — does not matter.
+//! so a Party's prefix — none, `sh:`, `ns0:` — does not matter.
 //!
 //! A document type identifier is `busdox-docid-qns::{root namespace}::
 //! {local name}##{customization}::{version}`, and the header's `Standard`,
@@ -372,7 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn a_partner_header_with_a_prefix_and_indentation_is_read_and_a_hollow_one_refused() {
+    fn a_party_header_with_a_prefix_and_indentation_is_read_and_a_hollow_one_refused() {
         let theirs = "<?xml version=\"1.0\"?>\n<sh:StandardBusinessDocument xmlns:sh=\"x\">\n  \
             <sh:StandardBusinessDocumentHeader>\n    <sh:HeaderVersion>1.0</sh:HeaderVersion>\n    \
             <sh:Sender><sh:Identifier Authority=\"iso6523-actorid-upis\">0007:5560001234\
