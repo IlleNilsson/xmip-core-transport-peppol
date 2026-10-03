@@ -37,6 +37,7 @@ pub mod participant;
 pub mod sbdh;
 mod settings;
 
+use std::io::Read;
 use std::net::TcpListener;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -45,8 +46,8 @@ use as4::{As4Transport, Signer, Unsigned, UserMessage};
 pub use loopback::PARTICIPANT;
 pub use participant::{Directory, Participant};
 pub use sbdh::{Header, Identifier};
-use transport::error::{Result, protocol_error};
-use transport::{Arrived, Directions, Transport};
+use transport::error::{Result, classify, protocol_error};
+use transport::{Arrived, Directions, Refusal, Taken, Transport, Verdict};
 
 /// The Peppol BIS Billing 3.0 invoice, the document type a transport carries
 /// until [`PeppolTransport::carrying`].
@@ -160,39 +161,19 @@ impl PeppolTransport {
     }
 
     /// Accept one Standard Business Document on an already-bound listener,
-    /// receipt it and unwrap it; `None` where it was one seen before,
-    /// receipted again and not delivered again.
+    /// receipt it at once and unwrap it: what a far end does. `None` where
+    /// it was one seen before, receipted again and not delivered again.
     ///
     /// # Errors
-    /// Where the connection broke, the message is not under the profile or
-    /// not for this participant — each answered with the Error that says
-    /// so — or what it carried is no Standard Business Document for this
-    /// participant.
-    pub fn accept_one(&self, listener: &TcpListener) -> Result<Option<Arrived>> {
-        self.delivered(self.inbox().accept_one(listener)?)
-    }
-
-    /// The Standard Business Document an AS4 message carried, unwrapped,
-    /// where it is one for this participant; `None` where the access point
-    /// had seen the message before.
-    fn delivered(&self, received: Option<(UserMessage, Arrived)>) -> Result<Option<Arrived>> {
-        let Some((_, posted)) = received else {
+    /// Where the connection broke, or the message is not under the profile
+    /// or not for this participant — each answered with the Error that
+    /// says so.
+    pub fn accept_one(&self, listener: &TcpListener) -> Result<Option<Taken>> {
+        let Some((_, posted)) = self.inbox().accept_one(listener)? else {
             return Ok(None);
         };
-        let (header, document) = Header::unwrap(&posted.bytes)?;
-        if header.receiver != self.me {
-            return Err(protocol_error(format!(
-                "a business document for {}, and this participant is {}",
-                header.receiver, self.me
-            )));
-        }
-        let at = posted.origin_uri.strip_prefix("as4://").unwrap_or_default();
-        let at = at.split('?').next().unwrap_or_default();
-        let origin = format!(
-            "peppol://{at}?sender={}&receiver={}&instance={}",
-            header.sender.value, header.receiver.value, header.instance
-        );
-        Ok(Some(Arrived::new(origin, document)))
+        let (origin, document) = delivered(&posted.origin_uri, &posted.bytes)?;
+        Ok(Some(Taken::new(origin, document)))
     }
 
     /// This participant's access point, checking the profile.
@@ -200,7 +181,10 @@ impl PeppolTransport {
         self.inbox.get_or_init(|| {
             let me = self.me.clone();
             self.access_point(&self.endpoint, &self.me)
-                .checking(move |message| under_the_profile(message, &me))
+                .checking(move |message, payload| {
+                    under_the_profile(message, &me)?;
+                    addressed(&Header::unwrap(payload)?.0, &me)
+                })
         })
     }
 
@@ -297,6 +281,33 @@ impl Signer for Shared {
     }
 }
 
+/// The business document an AS4 message from `posted` carried, unwrapped
+/// from its Standard Business Document, and its origin: the access point
+/// checked the header as it read the message.
+fn delivered(posted: &str, bytes: &[u8]) -> Result<(String, Vec<u8>)> {
+    let (header, document) = Header::unwrap(bytes)?;
+    let at = posted.strip_prefix("as4://").unwrap_or_default();
+    let at = at.split('?').next().unwrap_or_default();
+    let origin = format!(
+        "peppol://{at}?sender={}&receiver={}&instance={}",
+        header.sender.value, header.receiver.value, header.instance
+    );
+    Ok((origin, document))
+}
+
+/// Whether the Standard Business Document `header` names `me` as its
+/// receiver.
+fn addressed(header: &Header, me: &Participant) -> Result<()> {
+    if header.receiver == *me {
+        Ok(())
+    } else {
+        Err(protocol_error(format!(
+            "a business document for {}, and this participant is {me}",
+            header.receiver
+        )))
+    }
+}
+
 impl Transport for PeppolTransport {
     fn name(&self) -> &'static str {
         "peppol"
@@ -306,12 +317,44 @@ impl Transport for PeppolTransport {
         Directions::BOTH
     }
 
+    fn arrivals(&self) -> transport::Arrivals {
+        transport::Arrivals::Unordered(
+            "each request is its own, and a connection waiting for its answer takes no next request",
+        )
+    }
+
     /// The next document from whichever access point posts first, on the
     /// listener this participant's access point bound on the first receive
     /// and kept.
+    ///
+    /// The access point waits for its Receipt until the verdict, as AS4's
+    /// does (`As4Transport::take_next`): the Receipt on acceptance; a final
+    /// ebMS Error and the `4xx` that says why on refusal, so it does not
+    /// send the document again; `503` and an Error on failure, so it sends
+    /// it again. A document not under the profile or not for this
+    /// participant is answered its Error at once; one whose body broke as it
+    /// was read fails, and one that cannot be unwrapped is refused.
     fn receive(&self) -> Result<Vec<Arrived>> {
-        let received = self.inbox().take_next()?;
-        Ok(self.delivered(received)?.into_iter().collect())
+        let Some((_, posted)) = self.inbox().take_next()? else {
+            return Ok(Vec::new());
+        };
+        let (origin, mut body, acknowledgement) = posted.into_parts();
+        let mut bytes = Vec::new();
+        let unwrapped = body
+            .read_to_end(&mut bytes)
+            .map_err(|error| classify("reading what arrived", &error))
+            .and_then(|_| delivered(&origin, &bytes));
+        match unwrapped {
+            Ok((origin, document)) => Ok(vec![Arrived::whole(origin, document, acknowledgement)]),
+            Err(error) => {
+                acknowledgement.acknowledge(if error.retryable {
+                    Verdict::Failed
+                } else {
+                    Verdict::Refused(Refusal::Unacceptable)
+                })?;
+                Err(error)
+            }
+        }
     }
 
     fn send(&self, target: &str, bytes: &[u8]) -> Result<()> {
@@ -362,11 +405,56 @@ mod tests {
             }
         });
         for round in 0..5 {
-            let arrived = seller.receive().expect("received");
+            let mut arrived = seller.receive().expect("received");
             let invoice = format!("<Invoice><ID>{round}</ID></Invoice>");
-            assert_eq!(arrived[0].bytes, invoice.as_bytes());
+            let taken = arrived.remove(0).taken().expect("taken");
+            assert_eq!(taken.bytes, invoice.as_bytes());
         }
         buyer.join().expect("buyer");
+    }
+
+    #[test]
+    fn a_failed_cycle_answers_an_error_and_the_access_point_sends_again() {
+        let (seller, _, _) = seller();
+        let address = seller.listening().expect("bound").to_string();
+        let buyer = std::thread::spawn(move || {
+            let buyer = PeppolTransport::new(
+                format!("as4://{address}/as4"),
+                participant("0088:1"),
+                participant("0192:2"),
+            )
+            .timing_out_after(secs(2));
+            let failed = buyer.send("", b"<Invoice/>").expect_err("failed");
+            buyer
+                .send("", b"<Invoice/>")
+                .expect("sent again, receipted");
+            let refused = buyer.send("", b"<Invoice/>").expect_err("refused");
+            (failed, refused)
+        });
+        let mut arrived = seller.receive().expect("received");
+        let first = arrived.remove(0);
+        assert!(first.defers());
+        assert!(
+            first.origin_uri.starts_with("peppol://"),
+            "{}",
+            first.origin_uri
+        );
+        assert!(!buyer.is_finished(), "no Receipt before the verdict");
+        first.failed().expect("failed");
+        let mut arrived = seller.receive().expect("again");
+        let taken = arrived.remove(0).taken().expect("taken");
+        assert_eq!(taken.bytes, b"<Invoice/>");
+        seller
+            .receive()
+            .expect("the third")
+            .remove(0)
+            .refused(Refusal::Forbidden)
+            .expect("refused");
+        let (failed, refused) = buyer.join().expect("buyer");
+        assert!(failed.retryable, "{failed}");
+        assert!(failed.message.contains("EBMS:0004"), "{failed}");
+        assert!(!refused.retryable, "final: {refused}");
+        assert!(refused.message.contains("403"), "{refused}");
     }
 
     #[test]
