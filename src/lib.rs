@@ -358,10 +358,29 @@ impl Transport for PeppolTransport {
     }
 
     fn send(&self, target: &str, bytes: &[u8]) -> Result<()> {
+        self.post(target, bytes, None)
+    }
+
+    /// The key is the AS4 User Message's `eb:MessageId`, as the as4
+    /// technology puts it: a receiving access point detects a duplicate by
+    /// it, as the Peppol AS4 profile asks, and does not deliver it again.
+    fn send_keyed(&self, target: &str, bytes: &[u8], key: &str) -> Result<()> {
+        self.post(target, bytes, Some(key))
+    }
+}
+
+impl PeppolTransport {
+    /// The one send: the document wrapped in its header and posted to the
+    /// receiver's access point.
+    fn post(&self, target: &str, bytes: &[u8], key: Option<&str>) -> Result<()> {
         let (receiver, endpoint) = self.resolve(target)?;
         let header = Header::new(&self.me, &receiver, &self.document, &self.process);
         let wrapped = header.wrap(bytes)?;
-        self.access_point(&endpoint, &receiver).send("", &wrapped)
+        let access_point = self.access_point(&endpoint, &receiver);
+        match key {
+            Some(key) => access_point.send_keyed("", &wrapped, key),
+            None => access_point.send("", &wrapped),
+        }
     }
 }
 

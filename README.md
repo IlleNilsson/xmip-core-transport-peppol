@@ -10,6 +10,10 @@ An access point written `as4://` is read under AS4's declared schemes (`as4::SCH
 
 The sending access point waits for its Receipt until the runtime's whole receive cycle has ended, as AS4's does: the Receipt on `Accepted`; on `Refused` a final ebMS Error (`EBMS:0101` for a sender not identified, `EBMS:0004` otherwise) with HTTP's `401`, `403` or `422`, so it does not send the document again; on `Failed` `503` and an ebMS Error `EBMS:0004`, so it sends the document again. A document whose body broke as it was read fails; one that passed the check and still cannot be unwrapped is refused as unacceptable. The profile and the Standard Business Document Header — that its receiver is this participant — are checked as the message is read, through AS4's `checking`, and a document that fails is answered its Error (`EBMS:0103`) at once rather than receipted. Until 2026-10-02 the header's receiver was checked after the Receipt was written. The header is read twice, once to check and once to unwrap, an in-memory step; no round trip is added.
 
+## The deduplication key
+
+A keyed send (`Transport::send_keyed`, built 2026-10-04) carries the Journey's identifier as the AS4 User Message's `eb:MessageId`, through the as4 technology's own keyed send, the same on every attempt of one Journey: a receiving access point detects the duplicate by it, as the Peppol AS4 profile asks, receipts it again and does not deliver it again. An unkeyed `send` carries a random id, as before.
+
 ## Toolchain
 
 `rust-toolchain.toml` pins the toolchain for the whole estate. Do not change it
