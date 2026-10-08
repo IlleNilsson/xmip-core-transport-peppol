@@ -16,6 +16,7 @@ use std::sync::{Arc, OnceLock};
 
 use as4::Unsigned;
 use net::Endpoint;
+use transport::ArrivalIdentity;
 use transport::Transport;
 use transport::error::{Result, protocol_error};
 use transport::listening::Listening;
@@ -60,6 +61,10 @@ impl PeppolTransport {
 /// A bound access point waiting for its one Standard Business Document,
 /// which it receipts and unwraps.
 impl Loopback for PeppolTransport {
+    fn arrival_identity(&self) -> ArrivalIdentity {
+        ArrivalIdentity::PEER
+    }
+
     fn refuses(&self, payload: &[u8]) -> Option<String> {
         match business_document(payload) {
             Err(error) => Some(error.message),
