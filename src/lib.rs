@@ -173,7 +173,9 @@ impl PeppolTransport {
             return Ok(None);
         };
         let (origin, document) = delivered(&posted.origin_uri, &posted.bytes)?;
-        Ok(Some(Taken::new(origin, document)))
+        let mut taken = Taken::new(origin, document);
+        taken.observed = posted.observed;
+        Ok(Some(taken))
     }
 
     /// This participant's access point, checking the profile.
@@ -335,9 +337,11 @@ impl Transport for PeppolTransport {
     /// participant is answered its Error at once; one whose body broke as it
     /// was read fails, and one that cannot be unwrapped is refused.
     fn receive(&self) -> Result<Vec<Arrived>> {
-        let Some((_, posted)) = self.inbox().take_next()? else {
+        let Some((_, mut posted)) = self.inbox().take_next()? else {
             return Ok(Vec::new());
         };
+        // Who posted it travels on: the AS4 request said so.
+        let (headers, observed) = (posted.take_headers(), posted.take_observed());
         let (origin, mut body, acknowledgement) = posted.into_parts();
         let mut bytes = Vec::new();
         let unwrapped = body
@@ -345,7 +349,11 @@ impl Transport for PeppolTransport {
             .map_err(|error| classify("reading what arrived", &error))
             .and_then(|_| delivered(&origin, &bytes));
         match unwrapped {
-            Ok((origin, document)) => Ok(vec![Arrived::whole(origin, document, acknowledgement)]),
+            Ok((origin, document)) => Ok(vec![
+                Arrived::whole(origin, document, acknowledgement)
+                    .with_headers(headers)
+                    .observing_all(observed),
+            ]),
             Err(error) => {
                 acknowledgement.acknowledge(if error.retryable {
                     Verdict::Failed
