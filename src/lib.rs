@@ -325,6 +325,10 @@ impl Transport for PeppolTransport {
         )
     }
 
+    fn waiting(&self) -> transport::Waiting {
+        transport::Waiting::Waits("the access point's listener waits for a document")
+    }
+
     /// The next document from whichever access point posts first, on the
     /// listener this participant's access point bound on the first receive
     /// and kept.
