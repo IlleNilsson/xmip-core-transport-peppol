@@ -340,7 +340,7 @@ impl Transport for PeppolTransport {
     /// it again. A document not under the profile or not for this
     /// participant is answered its Error at once; one whose body broke as it
     /// was read fails, and one that cannot be unwrapped is refused.
-    fn receive(&self) -> Result<Vec<Arrived>> {
+    fn receive_up_to(&self, _most: usize) -> Result<Vec<Arrived>> {
         let Some((_, mut posted)) = self.inbox().take_next()? else {
             return Ok(Vec::new());
         };
@@ -369,15 +369,18 @@ impl Transport for PeppolTransport {
         }
     }
 
-    fn send(&self, target: &str, bytes: &[u8]) -> Result<()> {
-        self.post(target, bytes, None)
+    fn sending(&self) -> transport::Sending {
+        transport::Sending::Gathered(
+            "the User Message is signed whole, its digest taken over all of it",
+        )
     }
 
     /// The key is the AS4 User Message's `eb:MessageId`, as the as4
     /// technology puts it: a receiving access point detects a duplicate by
     /// it, as the Peppol AS4 profile asks, and does not deliver it again.
-    fn send_keyed(&self, target: &str, bytes: &[u8], key: &str) -> Result<()> {
-        self.post(target, bytes, Some(key))
+    fn send_from(&self, target: &str, outgoing: transport::Outgoing<'_>) -> Result<()> {
+        let bytes: &[u8] = &outgoing.gather()?;
+        self.post(target, bytes, outgoing.key())
     }
 }
 
@@ -389,10 +392,11 @@ impl PeppolTransport {
         let header = Header::new(&self.me, &receiver, &self.document, &self.process);
         let wrapped = header.wrap(bytes)?;
         let access_point = self.access_point(&endpoint, &receiver);
-        match key {
-            Some(key) => access_point.send_keyed("", &wrapped, key),
-            None => access_point.send("", &wrapped),
-        }
+        let outgoing = match key {
+            Some(key) => transport::Outgoing::held(&wrapped).keyed(key),
+            None => transport::Outgoing::held(&wrapped),
+        };
+        access_point.send_from("", outgoing)
     }
 }
 

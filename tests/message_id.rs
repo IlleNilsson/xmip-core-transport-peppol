@@ -33,9 +33,11 @@ fn a_keyed_document_is_delivered_once_however_often_it_is_sent() {
         participant("0192:2"),
     );
     let invoice = b"<Invoice><ID>1</ID></Invoice>";
-    buyer.send_keyed("", invoice, KEY).expect("sent");
     buyer
-        .send_keyed("", invoice, KEY)
+        .send_from("", transport::Outgoing::held(invoice).keyed(KEY))
+        .expect("sent");
+    buyer
+        .send_from("", transport::Outgoing::held(invoice).keyed(KEY))
         .expect("sent again, receipted again");
     buyer.send("", invoice).expect("sent unkeyed");
     let taken = taking.join().expect("far end");
