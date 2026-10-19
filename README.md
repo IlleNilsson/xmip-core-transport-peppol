@@ -12,7 +12,7 @@ The sending access point waits for its Receipt until the runtime's whole receive
 
 ## The deduplication key
 
-A keyed send (`Transport::send_keyed`, built 2026-10-04) carries the Journey's identifier as the AS4 User Message's `eb:MessageId`, through the as4 technology's own keyed send, the same on every attempt of one Journey: a receiving access point detects the duplicate by it, as the Peppol AS4 profile asks, receipts it again and does not deliver it again. An unkeyed `send` carries a random id, as before.
+A keyed send (the key `Transport::send_from` is handed, `Outgoing::key`; built 2026-10-04) carries the Journey's identifier as the AS4 User Message's `eb:MessageId`, through the as4 technology's own keyed send, the same on every attempt of one Journey: a receiving access point detects the duplicate by it, as the Peppol AS4 profile asks, receipts it again and does not deliver it again. An unkeyed `send` carries a random id, as before.
 
 ## Toolchain
 
