@@ -6,7 +6,7 @@
 //! scheme the network uses, two colons, and a value that is a four-digit
 //! ISO 6523 International Code Designator, a colon, and the identifier the
 //! designated authority issued (Peppol Policy for use of Identifiers,
-//! section 4: 0088 is GS1's GLN, 0007 the Swedish organisation number,
+//! section 4: 0088 is GS1's GLN, 0007 the Swedish organization number,
 //! 0192 the Norwegian). The scheme is fixed and the value is what is
 //! checked, so a participant is written and read by its value and prints
 //! qualified.
