@@ -54,6 +54,9 @@ impl Configured for PeppolTransport {
         ],
     };
 
+    /// The schemes a Location's address is entered with to choose this technology.
+    const SCHEMES: &'static [&'static str] = &["peppol"];
+
     /// The signing certificate comes through the Location's credentials,
     /// never a setting; a Receive Location sends to no Party, so its own
     /// participant stands in for one.
