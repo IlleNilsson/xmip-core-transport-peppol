@@ -1,5 +1,5 @@
 //! A keyed send carries its deduplication key as the AS4 User Message's
-//! `eb:MessageId`, the same on every attempt of one Journey: the receiving
+//! `eb:MessageId`, the same on every attempt on one Journey: the receiving
 //! access point receipts the repeat again and does not deliver it again.
 
 use std::thread;
