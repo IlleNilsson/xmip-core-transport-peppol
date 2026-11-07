@@ -178,7 +178,10 @@ impl Header {
             .ok_or_else(|| protocol_error("no StandardBusinessDocument in what arrived"))?;
         let header = content(root, "StandardBusinessDocumentHeader")
             .ok_or_else(|| protocol_error("a StandardBusinessDocument with no header"))?;
-        let after_header = offset(root, header) + header.len();
+        let after_header = root
+            .substr_range(header)
+            .ok_or_else(|| protocol_error("a header outside its StandardBusinessDocument"))?
+            .end;
         let closing = root[after_header..]
             .find('>')
             .ok_or_else(|| protocol_error("a header that never closes"))?;
@@ -328,11 +331,6 @@ fn text_of(xml: &str, name: &str) -> Result<String> {
         .map(|text| unescape(text.trim()))
         .transpose()?
         .unwrap_or_default())
-}
-
-/// Where `part`, a slice of `whole`, begins in it.
-fn offset(whole: &str, part: &str) -> usize {
-    part.as_ptr() as usize - whole.as_ptr() as usize
 }
 
 #[cfg(test)]
