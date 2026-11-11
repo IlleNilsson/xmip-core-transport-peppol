@@ -216,19 +216,19 @@ impl PeppolTransport {
         }
     }
 
-    /// Who a target sends to and where: empty is the Party; a URL is the
-    /// Party at that access point; anything else is a participant the
-    /// directory must know.
+    /// Who a target sends to and where: empty is the Party
+    /// (`transport::destination::named`); a URL is the Party at that access
+    /// point; anything else is a participant the directory must know.
     fn resolve(&self, target: &str) -> Result<(Participant, String)> {
-        if target.contains("://") {
-            return Ok((self.party.clone(), target.to_string()));
-        }
-        if target.is_empty() {
+        let Some(target) = transport::destination::named(target) else {
             let endpoint = self
                 .directory
                 .endpoint_of(&self.party)
                 .unwrap_or(&self.endpoint);
             return Ok((self.party.clone(), endpoint.to_string()));
+        };
+        if target.contains("://") {
+            return Ok((self.party.clone(), target.to_string()));
         }
         let receiver = Participant::parse(target)?;
         let endpoint = self.directory.endpoint_of(&receiver).ok_or_else(|| {
@@ -527,6 +527,56 @@ mod tests {
         assert_eq!(seller.directions(), Directions::BOTH);
         assert!(seller.claims().is_none());
         assert_eq!(seller.party().value, "0088:1");
+    }
+
+    #[test]
+    fn a_send_location_sends_to_its_party_and_a_named_participant_wins() {
+        use transport::Configured;
+        use xcore::settings::{Applies, Given};
+        let (party, party_listener, party_address) = seller();
+        let other = PeppolTransport::new(
+            "as4://127.0.0.1:0/as4",
+            participant("0192:3"),
+            participant("0088:1"),
+        )
+        .timing_out_after(secs(2));
+        let (other_listener, other_address) = other.bind().expect("binding");
+        let location = format!("peppol://{party_address}/as4");
+        let sender = std::thread::spawn(move || {
+            let text = |name: &str, value: &str| (name.to_string(), Given::Text(value.to_string()));
+            let given = [
+                text("participant", "0088:1"),
+                text("party", "0192:2"),
+                text("timeout", "2s"),
+            ];
+            let directory = Directory::default()
+                .with(participant("0192:3"), &format!("as4://{other_address}/as4"));
+            let near =
+                PeppolTransport::open(&location, Applies::Send, &given)?.resolving_from(directory);
+            near.send(PeppolTransport::own_target(&location), b"<Invoice/>")?;
+            near.send("0192:3", b"<Order/>")
+        });
+        let own = party
+            .accept_one(&party_listener)
+            .expect("accepted")
+            .expect("new");
+        assert_eq!(own.bytes, b"<Invoice/>");
+        assert!(
+            own.origin_uri.contains("sender=0088:1&receiver=0192:2&"),
+            "{}",
+            own.origin_uri
+        );
+        let named = other
+            .accept_one(&other_listener)
+            .expect("accepted")
+            .expect("new");
+        assert_eq!(named.bytes, b"<Order/>");
+        assert!(
+            named.origin_uri.contains("sender=0088:1&receiver=0192:3&"),
+            "{}",
+            named.origin_uri
+        );
+        sender.join().expect("thread").expect("receipted");
     }
 
     #[test]
