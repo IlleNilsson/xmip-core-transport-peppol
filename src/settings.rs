@@ -9,8 +9,8 @@ use crate::{BILLING_INVOICE, BILLING_PROCESS, Identifier, Participant, PeppolTra
 
 impl Configured for PeppolTransport {
     /// The address is the access point: the Party's a Send Location posts
-    /// to, `https://ap.example/as4` or `as4://host:port/as4`, or the one a
-    /// Receive Location listens at.
+    /// to, `peppol://ap.example/as4`, or the one a Receive Location listens
+    /// at.
     const SETTINGS: &'static Settings = &Settings {
         technology: env!("CARGO_PKG_NAME"),
         settings: &[
@@ -56,6 +56,18 @@ impl Configured for PeppolTransport {
 
     /// The schemes a Location's address is entered with to choose this technology.
     const SCHEMES: &'static [&'static str] = &["peppol"];
+
+    /// The whole address: `peppol://` is `as4://` on the wire (`as4::SCHEMES`),
+    /// read as the access point is.
+    fn own_terms(address: &str) -> &str {
+        address
+    }
+
+    /// The `party` setting: a Send Location sends to the participant it
+    /// names, at the access point its address or the directory names.
+    fn own_target(_address: &str) -> &str {
+        transport::destination::OWN
+    }
 
     /// The signing certificate comes through the Location's credentials,
     /// never a setting; a Receive Location sends to no Party, so its own
