@@ -47,7 +47,7 @@ pub use loopback::PARTICIPANT;
 pub use participant::{Directory, Participant};
 pub use sbdh::{Header, Identifier};
 use transport::error::{Result, classify, protocol_error};
-use transport::{Arrived, Directions, Refusal, Taken, Transport, Verdict};
+use transport::{Arrived, Configured, Directions, Refusal, Taken, Transport, Verdict};
 
 /// The Peppol BIS Billing 3.0 invoice, the document type a transport carries
 /// until [`PeppolTransport::carrying`].
@@ -74,6 +74,8 @@ pub struct PeppolTransport {
     directory: Directory,
     signer: Arc<dyn Signer>,
     timeout: Option<Duration>,
+    /// The most one caller's turn on this participant's access point takes.
+    turn: Duration,
     /// This participant's access point, made on the first accept and kept,
     /// so a document seen before stays seen.
     inbox: OnceLock<As4Transport>,
@@ -96,6 +98,7 @@ impl PeppolTransport {
             directory: Directory::default(),
             signer: Arc::new(Unsigned),
             timeout: None,
+            turn: transport::serving::TURN,
             inbox: OnceLock::new(),
         }
     }
@@ -178,7 +181,8 @@ impl PeppolTransport {
         Ok(Some(taken))
     }
 
-    /// This participant's access point, checking the profile.
+    /// This participant's access point, checking the profile, each caller's
+    /// turn on it taking at most the node's.
     fn inbox(&self) -> &As4Transport {
         self.inbox.get_or_init(|| {
             let me = self.me.clone();
@@ -187,6 +191,7 @@ impl PeppolTransport {
                     under_the_profile(message, &me)?;
                     addressed(&Header::unwrap(payload)?.0, &me)
                 })
+                .turning_within(self.turn)
         })
     }
 
@@ -536,7 +541,6 @@ mod tests {
 
     #[test]
     fn a_send_location_sends_to_its_party_and_a_named_participant_wins() {
-        use transport::Configured;
         use xcore::settings::{Applies, Given};
         let (party, party_listener, party_address) = seller();
         let other = PeppolTransport::new(

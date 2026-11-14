@@ -87,6 +87,13 @@ impl Configured for PeppolTransport {
             None => transport,
         })
     }
+
+    /// Each caller's turn on this participant's access point taking at
+    /// most `turn`.
+    fn turning_within(mut self, turn: std::time::Duration) -> Self {
+        self.turn = turn;
+        self
+    }
 }
 
 #[cfg(test)]

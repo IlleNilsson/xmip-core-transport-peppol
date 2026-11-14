@@ -53,6 +53,7 @@ impl PeppolTransport {
             directory: self.directory.clone(),
             signer: Arc::new(Unsigned),
             timeout: self.timeout,
+            turn: self.turn,
             inbox: OnceLock::new(),
         }
     }
