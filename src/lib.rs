@@ -319,6 +319,11 @@ impl Transport for PeppolTransport {
         Directions::BOTH
     }
 
+    /// The callers turned away at their own connection (`transport::serving`).
+    fn turned_away(&self) -> transport::Turned {
+        self.inbox().turned_away()
+    }
+
     fn arrivals(&self) -> transport::Arrivals {
         transport::Arrivals::Unordered(
             "each request is its own, and a connection waiting for its answer takes no next request",

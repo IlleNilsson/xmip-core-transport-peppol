@@ -7,7 +7,8 @@
 //! child is the business document itself — a UBL Invoice, an Order — so
 //! what an access point posts is one XML document with the header first,
 //! and what a Receive Location hands up is the document alone. Written by
-//! hand and read with the estate's flat scan (`codec::xml`), by local name,
+//! hand and read with the estate's one XML reader (`codec::xml`): the flat
+//! scan by local name, and the payload held to one document by its reader,
 //! so a Party's prefix — none, `sh:`, `ns0:` — does not matter.
 //!
 //! A document type identifier is `busdox-docid-qns::{root namespace}::
@@ -18,7 +19,7 @@
 use std::fmt;
 
 use as4::UserMessage;
-use codec::xml::{attribute, content, elements, escape, unescape};
+use codec::xml::{Event, Reader, attribute, content, elements, escape, unescape};
 use transport::error::{Result, protocol_error};
 
 use crate::participant::{Participant, SCHEME};
@@ -229,43 +230,32 @@ pub fn business_document(payload: &[u8]) -> Result<&str> {
             "a Peppol payload is one XML business document, and these bytes are not UTF-8",
         )
     })?;
-    let mut document = text.trim_start_matches('\u{feff}').trim();
-    if document.starts_with("<?xml") {
-        let end = document
-            .find("?>")
-            .ok_or_else(|| protocol_error("an XML declaration that never closes"))?;
-        document = document[end + 2..].trim_start();
+    let refused =
+        || protocol_error("a Peppol payload is one XML business document, and this is not one");
+    // Read through the estate's one XML reader, which holds the bytes to a
+    // document's order: white space around one root element, the XML
+    // declaration before it, and nothing else.
+    let mut reader = Reader::document(text);
+    let mut root: Option<(usize, Option<usize>)> = None;
+    while let Some(piece) = reader.read().map_err(|_| refused())? {
+        match (root, piece.event) {
+            (None, Event::Start(tag)) => {
+                let end = tag.empty().then_some(piece.span.end);
+                root = Some((piece.span.start, end));
+            }
+            (Some((start, None)), Event::End(_)) if reader.depth() == 0 => {
+                root = Some((start, Some(piece.span.end)));
+            }
+            (None | Some((_, Some(_))), Event::Text(_))
+            | (None, Event::Instruction { target: "xml", .. })
+            | (Some((_, None)), _) => {}
+            _ => return Err(refused()),
+        }
     }
-    let is_element = document.len() > 2
-        && document.starts_with('<')
-        && !document.starts_with("<?")
-        && !document.starts_with("<!")
-        && closes(document);
-    if !is_element {
-        return Err(protocol_error(
-            "a Peppol payload is one XML business document, and this is not one",
-        ));
+    match root {
+        Some((start, Some(end))) => Ok(&text[start..end]),
+        _ => Err(refused()),
     }
-    Ok(document)
-}
-
-/// Whether `document`, which opens with an element, ends where that element
-/// does: one empty tag, or the closing tag of the name it opened with.
-fn closes(document: &str) -> bool {
-    let name = document[1..]
-        .split(|c: char| c.is_whitespace() || c == '/' || c == '>')
-        .next()
-        .unwrap_or_default();
-    if name.is_empty() {
-        return false;
-    }
-    let emptied = document.ends_with("/>") && document.matches('<').count() == 1;
-    let closed = document
-        .strip_suffix('>')
-        .map(str::trim_end)
-        .and_then(|rest| rest.strip_suffix(name))
-        .is_some_and(|rest| rest.ends_with("</"));
-    emptied || (closed && document.matches('<').count() > 1)
 }
 
 /// `<Sender>` or `<Receiver>` naming `participant` under its authority.
