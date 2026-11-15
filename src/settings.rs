@@ -43,14 +43,12 @@ impl Configured for PeppolTransport {
                 meaning: "The process the document belongs to, under the Peppol process scheme.",
                 applies: Applies::Both,
             },
-            Setting {
-                name: "timeout",
-                kind: Kind::Duration,
-                presence: Presence::Optional,
-                meaning: "How long an access point that stops mid-message is waited on; \
-                          unbounded when left out.",
-                applies: Applies::Both,
-            },
+            transport::configured::timeout(
+                Applies::Both,
+                None,
+                "How long an access point that stops mid-message is waited on; \
+                 unbounded when left out.",
+            ),
         ],
     };
 
@@ -69,6 +67,10 @@ impl Configured for PeppolTransport {
         transport::destination::OWN
     }
 
+    fn timeout_kept(&mut self) -> Option<&mut dyn transport::configured::TimeoutKept> {
+        Some(&mut self.timeout)
+    }
+
     /// The signing certificate comes through the Location's credentials,
     /// never a setting; a Receive Location sends to no Party, so its own
     /// participant stands in for one.
@@ -78,14 +80,10 @@ impl Configured for PeppolTransport {
             Some(party) => Participant::parse(party)?,
             None => me.clone(),
         };
-        let transport = Self::new(address, me, party).carrying(
+        Ok(Self::new(address, me, party).carrying(
             Identifier::document(settings.text("document")),
             Identifier::process(settings.text("process")),
-        );
-        Ok(match settings.optional_duration("timeout") {
-            Some(timeout) => transport.timing_out_after(timeout),
-            None => transport,
-        })
+        ))
     }
 
     /// Each caller's turn on this participant's access point taking at

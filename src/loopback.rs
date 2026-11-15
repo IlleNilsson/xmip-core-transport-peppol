@@ -17,6 +17,7 @@ use std::sync::{Arc, OnceLock};
 use as4::Unsigned;
 use net::Endpoint;
 use transport::ArrivalIdentity;
+use transport::Configured;
 use transport::Transport;
 use transport::error::{Result, protocol_error};
 use transport::listening::Listening;

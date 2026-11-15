@@ -126,13 +126,6 @@ impl PeppolTransport {
         self
     }
 
-    /// Give up on an access point that stops mid-message.
-    #[must_use]
-    pub const fn timing_out_after(mut self, timeout: Duration) -> Self {
-        self.timeout = Some(timeout);
-        self
-    }
-
     /// The participant this transport speaks as.
     #[must_use]
     pub const fn me(&self) -> &Participant {
