@@ -42,6 +42,8 @@ use std::net::TcpListener;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+use xcore::{Clock, SystemClock};
+
 use as4::{As4Transport, Signer, Unsigned, UserMessage};
 pub use loopback::PARTICIPANT;
 pub use participant::{Directory, Participant};
@@ -76,6 +78,8 @@ pub struct PeppolTransport {
     timeout: Option<Duration>,
     /// The most one caller's turn on this participant's access point takes.
     turn: Duration,
+    /// What a turn, and an HTTP/2 peer's frames in a span, are counted on.
+    clock: Arc<dyn Clock>,
     /// This participant's access point, made on the first accept and kept,
     /// so a document seen before stays seen.
     inbox: OnceLock<As4Transport>,
@@ -99,6 +103,7 @@ impl PeppolTransport {
             signer: Arc::new(Unsigned),
             timeout: None,
             turn: transport::serving::TURN,
+            clock: Arc::new(SystemClock),
             inbox: OnceLock::new(),
         }
     }
@@ -207,7 +212,8 @@ impl PeppolTransport {
         template.payload_properties = vec![("MimeType".to_string(), "application/xml".to_string())];
         let transport = As4Transport::new(endpoint, &self.me.value, &receiver.value)
             .shaped(template)
-            .signing_with(Shared(Arc::clone(&self.signer)));
+            .signing_with(Shared(Arc::clone(&self.signer)))
+            .timed_by(&self.clock);
         match self.timeout {
             Some(timeout) => transport.timing_out_after(timeout),
             None => transport,

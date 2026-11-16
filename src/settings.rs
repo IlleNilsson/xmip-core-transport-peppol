@@ -92,6 +92,13 @@ impl Configured for PeppolTransport {
         self.turn = turn;
         self
     }
+
+    /// Each caller's turn on this participant's access point, and an HTTP/2
+    /// peer's frames in a span both ways, counted on `clock`.
+    fn timed_by(mut self, clock: &std::sync::Arc<dyn xcore::Clock>) -> Self {
+        self.clock = std::sync::Arc::clone(clock);
+        self
+    }
 }
 
 #[cfg(test)]

@@ -55,6 +55,7 @@ impl PeppolTransport {
             signer: Arc::new(Unsigned),
             timeout: self.timeout,
             turn: self.turn,
+            clock: Arc::clone(&self.clock),
             inbox: OnceLock::new(),
         }
     }
