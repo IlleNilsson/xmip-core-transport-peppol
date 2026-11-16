@@ -99,6 +99,12 @@ impl Configured for PeppolTransport {
         self.clock = std::sync::Arc::clone(clock);
         self
     }
+
+    /// This participant's access point listening, where a Receive Location
+    /// listens: the listener every receive takes from.
+    fn listening(&self) -> Result<Option<&str>> {
+        self.inbox().listening()
+    }
 }
 
 #[cfg(test)]

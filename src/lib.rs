@@ -152,15 +152,6 @@ impl PeppolTransport {
         self.inbox().bind()
     }
 
-    /// Bind the listener every receive takes from now, where no receive
-    /// has, and say where it is.
-    ///
-    /// # Errors
-    /// Where the address is taken, malformed, or not permitted.
-    pub fn listening(&self) -> Result<&str> {
-        self.inbox().listening()
-    }
-
     /// Accept one Standard Business Document on an already-bound listener,
     /// receipt it at once and unwrap it: what a far end does. `None` where
     /// it was one seen before, receipted again and not delivered again.
@@ -339,7 +330,7 @@ impl Transport for PeppolTransport {
     }
 
     /// The next document from whichever access point posts first, on the
-    /// listener this participant's access point bound on the first receive
+    /// listener this participant's access point bound as it was opened
     /// and kept.
     ///
     /// The access point waits for its Receipt until the verdict, as AS4's
@@ -435,7 +426,11 @@ mod tests {
     #[test]
     fn every_receive_takes_from_the_listener_the_first_bound() {
         let (seller, _, _) = seller();
-        let address = seller.listening().expect("bound").to_string();
+        let address = seller
+            .listening()
+            .expect("bound")
+            .expect("listens")
+            .to_string();
         let buyer = std::thread::spawn(move || {
             let buyer = PeppolTransport::new(
                 format!("as4://{address}/as4"),
@@ -460,7 +455,11 @@ mod tests {
     #[test]
     fn a_failed_cycle_answers_an_error_and_the_access_point_sends_again() {
         let (seller, _, _) = seller();
-        let address = seller.listening().expect("bound").to_string();
+        let address = seller
+            .listening()
+            .expect("bound")
+            .expect("listens")
+            .to_string();
         let buyer = std::thread::spawn(move || {
             let buyer = PeppolTransport::new(
                 format!("as4://{address}/as4"),
