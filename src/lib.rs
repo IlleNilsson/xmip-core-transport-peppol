@@ -31,41 +31,62 @@
 //!
 //! The origin URI carries what the header knew:
 //! `peppol://peer/as4?sender=0088:1&receiver=0088:2&instance=1.2@xmip`.
+//!
+//! **Built with its `declaration` feature alone** the crate is
+//! [`declaration`], what a Location of it is configured with, and none of
+//! the code above, which is behind the default feature: what the surfaces'
+//! library carries (ADR-0064, amendment 2026-11-26).
 
+#[cfg(feature = "declaration")]
+pub mod declaration;
+#[cfg(feature = "default")]
 mod loopback;
+#[cfg(feature = "default")]
 pub mod participant;
+#[cfg(feature = "default")]
 pub mod sbdh;
+#[cfg(feature = "default")]
 mod settings;
 
+#[cfg(feature = "default")]
 use std::io::Read;
+#[cfg(feature = "default")]
 use std::net::TcpListener;
+#[cfg(feature = "default")]
 use std::sync::{Arc, OnceLock};
+#[cfg(feature = "default")]
 use std::time::Duration;
 
+#[cfg(feature = "default")]
 use xcore::{Clock, SystemClock};
 
+#[cfg(feature = "default")]
 use as4::{As4Transport, Signer, Unsigned, UserMessage};
+#[cfg(feature = "default")]
 pub use loopback::PARTICIPANT;
+#[cfg(feature = "default")]
 pub use participant::{Directory, Participant};
+#[cfg(feature = "default")]
 pub use sbdh::{Header, Identifier};
+#[cfg(feature = "default")]
 use transport::error::{Result, classify, protocol_error};
+#[cfg(feature = "default")]
 use transport::{Arrived, Configured, Directions, Refusal, Taken, Transport, Verdict};
 
-/// The Peppol BIS Billing 3.0 invoice, the document type a transport carries
-/// until [`PeppolTransport::carrying`].
-pub const BILLING_INVOICE: &str = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::\
-    Invoice##urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0::2.1";
-/// The Peppol billing process, the one [`BILLING_INVOICE`] belongs to.
-pub const BILLING_PROCESS: &str = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0";
 /// The `type` both AS4 party ids carry: an access point.
+#[cfg(feature = "default")]
 const PARTY_TYPE: &str = "urn:fdc:peppol.eu:2017:identifiers:ap";
 /// The agreement every Peppol exchange is under.
+#[cfg(feature = "default")]
 const AGREEMENT: &str = "urn:fdc:peppol.eu:2017:agreements:tia:ap_provider";
 /// The message property naming the participant the document is from.
+#[cfg(feature = "default")]
 const ORIGINAL_SENDER: &str = "originalSender";
 /// The message property naming the participant the document is for.
+#[cfg(feature = "default")]
 const FINAL_RECIPIENT: &str = "finalRecipient";
 
+#[cfg(feature = "default")]
 pub struct PeppolTransport {
     /// The Party's access point to send to, or the address to listen at.
     endpoint: String,
@@ -85,6 +106,7 @@ pub struct PeppolTransport {
     inbox: OnceLock<As4Transport>,
 }
 
+#[cfg(feature = "default")]
 impl PeppolTransport {
     /// Speak as participant `me` to `party`, whose access point is at
     /// `endpoint` — `https://ap.example/as4` or `as4://host:port/as4` —
@@ -97,8 +119,8 @@ impl PeppolTransport {
             endpoint: endpoint.into(),
             me,
             party,
-            document: Identifier::document(BILLING_INVOICE),
-            process: Identifier::process(BILLING_PROCESS),
+            document: Identifier::document(declaration::BILLING_INVOICE),
+            process: Identifier::process(declaration::BILLING_PROCESS),
             directory: Directory::default(),
             signer: Arc::new(Unsigned),
             timeout: None,
@@ -238,6 +260,7 @@ impl PeppolTransport {
 
 /// Whether `message` is a Peppol one for `me`: the access-point party type,
 /// the agreement, and `me` as its final recipient.
+#[cfg(feature = "default")]
 fn under_the_profile(message: &UserMessage, me: &Participant) -> Result<()> {
     if message.party_type.as_deref() != Some(PARTY_TYPE) {
         return Err(protocol_error(format!(
@@ -266,8 +289,10 @@ fn under_the_profile(message: &UserMessage, me: &Participant) -> Result<()> {
 
 /// One signer held by the transport and lent to each as4 transport it
 /// makes.
+#[cfg(feature = "default")]
 struct Shared(Arc<dyn Signer>);
 
+#[cfg(feature = "default")]
 impl Signer for Shared {
     fn sign(&self, envelope: String, attachments: &[(String, Vec<u8>)]) -> Result<String> {
         self.0.sign(envelope, attachments)
@@ -281,6 +306,7 @@ impl Signer for Shared {
 /// The business document an AS4 message from `posted` carried, unwrapped
 /// from its Standard Business Document, and its origin: the access point
 /// checked the header as it read the message.
+#[cfg(feature = "default")]
 fn delivered(posted: &str, bytes: &[u8]) -> Result<(String, Vec<u8>)> {
     let (header, document) = Header::unwrap(bytes)?;
     let at = posted.strip_prefix("as4://").unwrap_or_default();
@@ -294,6 +320,7 @@ fn delivered(posted: &str, bytes: &[u8]) -> Result<(String, Vec<u8>)> {
 
 /// Whether the Standard Business Document `header` names `me` as its
 /// receiver.
+#[cfg(feature = "default")]
 fn addressed(header: &Header, me: &Participant) -> Result<()> {
     if header.receiver == *me {
         Ok(())
@@ -305,6 +332,7 @@ fn addressed(header: &Header, me: &Participant) -> Result<()> {
     }
 }
 
+#[cfg(feature = "default")]
 impl Transport for PeppolTransport {
     fn name(&self) -> &'static str {
         "peppol"
@@ -384,6 +412,7 @@ impl Transport for PeppolTransport {
     }
 }
 
+#[cfg(feature = "default")]
 impl PeppolTransport {
     /// The one send: the document wrapped in its header and posted to the
     /// receiver's access point.
@@ -659,8 +688,8 @@ mod tests {
             let header = Header::new(
                 buyer.me(),
                 &participant("0192:3"),
-                &Identifier::document(BILLING_INVOICE),
-                &Identifier::process(BILLING_PROCESS),
+                &Identifier::document(declaration::BILLING_INVOICE),
+                &Identifier::process(declaration::BILLING_PROCESS),
             );
             let wrapped = header.wrap(b"<Invoice/>").expect("wrapped");
             buyer

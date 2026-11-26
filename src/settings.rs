@@ -1,59 +1,16 @@
-//! The settings a Peppol Location takes, declared once and read through
-//! (ADR-0064, amendment 2026-09-26).
+//! How a Peppol Location is built from the settings it takes, declared once
+//! in [`crate::declaration`] and read through (ADR-0064, amendments
+//! 2026-09-26 and 2026-11-26).
 
 use transport::Configured;
 use transport::error::Result;
-use xcore::settings::{Applies, Fixed, Kind, Presence, Read, Setting, Settings};
+use xcore::settings::{Read, Settings};
 
-use crate::{BILLING_INVOICE, BILLING_PROCESS, Identifier, Participant, PeppolTransport};
+use crate::{Identifier, Participant, PeppolTransport, declaration};
 
 impl Configured for PeppolTransport {
-    /// The address is the access point: the Party's a Send Location posts
-    /// to, `peppol://ap.example/as4`, or the one a Receive Location listens
-    /// at.
-    const SETTINGS: &'static Settings = &Settings {
-        technology: env!("CARGO_PKG_NAME"),
-        settings: &[
-            Setting {
-                name: "participant",
-                kind: Kind::Text,
-                presence: Presence::Required,
-                meaning: "The participant a Location speaks as, `0088:…` or qualified by its \
-                          scheme.",
-                applies: Applies::Both,
-            },
-            Setting {
-                name: "party",
-                kind: Kind::Text,
-                presence: Presence::Required,
-                meaning: "The participant a Send Location sends to when its target names none.",
-                applies: Applies::Send,
-            },
-            Setting {
-                name: "document",
-                kind: Kind::Text,
-                presence: Presence::Default(Fixed::Text(BILLING_INVOICE)),
-                meaning: "The document type carried, under the Peppol document scheme.",
-                applies: Applies::Both,
-            },
-            Setting {
-                name: "process",
-                kind: Kind::Text,
-                presence: Presence::Default(Fixed::Text(BILLING_PROCESS)),
-                meaning: "The process the document belongs to, under the Peppol process scheme.",
-                applies: Applies::Both,
-            },
-            transport::configured::timeout(
-                Applies::Both,
-                None,
-                "How long an access point that stops mid-message is waited on; \
-                 unbounded when left out.",
-            ),
-        ],
-    };
-
-    /// The schemes a Location's address is entered with to choose this technology.
-    const SCHEMES: &'static [&'static str] = &["peppol"];
+    const SETTINGS: &'static Settings = declaration::SETTINGS;
+    const SCHEMES: &'static [&'static str] = declaration::SCHEMES;
 
     /// The whole address: `peppol://` is `as4://` on the wire (`as4::SCHEMES`),
     /// read as the access point is.
@@ -110,8 +67,9 @@ impl Configured for PeppolTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::declaration::{BILLING_INVOICE, BILLING_PROCESS};
     use std::time::Duration;
-    use xcore::settings::Given;
+    use xcore::settings::{Applies, Given};
 
     #[test]
     fn peppol_declares_its_settings_and_reads_through_them() {

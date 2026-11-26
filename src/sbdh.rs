@@ -331,8 +331,8 @@ mod tests {
         Header::new(
             &Participant::new("0088:1").expect("sender"),
             &Participant::new("0192:2").expect("receiver"),
-            &Identifier::document(crate::BILLING_INVOICE),
-            &Identifier::process(crate::BILLING_PROCESS),
+            &Identifier::document(crate::declaration::BILLING_INVOICE),
+            &Identifier::process(crate::declaration::BILLING_PROCESS),
         )
     }
 
@@ -430,9 +430,15 @@ mod tests {
         assert!(business_document(b"<?xml version=\"1.0\"").is_err());
         assert!(business_document(b"<a>").is_err());
         assert!(business_document(b"<a></a>x").is_err());
-        let invoice = Identifier::parse(&format!("busdox-docid-qns::{}", crate::BILLING_INVOICE))
-            .expect("parsed");
-        assert_eq!(invoice, Identifier::document(crate::BILLING_INVOICE));
+        let invoice = Identifier::parse(&format!(
+            "busdox-docid-qns::{}",
+            crate::declaration::BILLING_INVOICE
+        ))
+        .expect("parsed");
+        assert_eq!(
+            invoice,
+            Identifier::document(crate::declaration::BILLING_INVOICE)
+        );
         assert_eq!(
             invoice.parts(),
             (
