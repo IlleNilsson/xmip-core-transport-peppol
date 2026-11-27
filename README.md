@@ -20,11 +20,6 @@ A keyed send (the key `Transport::send_from` is handed, `Outgoing::key`; built 2
 
 What a Location of this technology is configured with is two `const`s in its `declaration` module, `src/declaration.rs`, beside the code, which `Configured` reads (ADR-0064, amendment 2026-11-26): `declaration::SETTINGS`, `participant`, `party`, `document`, `process` and `timeout`, and `SCHEMES`, `peppol`; the Peppol billing invoice and process, `document`'s and `process`'s defaults, are declared there too, `declaration::BILLING_INVOICE` and `BILLING_PROCESS`, where they were the crate's own until then. Built with its `declaration` feature alone (`--no-default-features --features declaration`), the crate is those and nothing more: its code and every crate the code is built on — the as4 technology, and with it HTTP and TLS — are behind the default feature, and `tls`, which is code, turns the default on with it. So the library the surfaces load carries it without the code, through the gathering crate xmip-core-declaration (open problem 48), and the language server and the desktop suggest and check a Peppol Location's settings though no node in their process loaded the technology. `test/Declaration.Test.ps1` in the estate holds that the declaration builds nothing the transport capability does not.
 
-## Toolchain
-
-`rust-toolchain.toml` pins the toolchain for the whole estate. Do not change it
-here.
-
 ## Verification
 
 The included workflow is manual-only and calls the versioned shared workflow at
