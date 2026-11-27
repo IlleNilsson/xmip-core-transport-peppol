@@ -1,10 +1,7 @@
-//! What a Location of this technology is configured with: its declaration,
-//! which `Configured` reads, built with the crate's `declaration` feature
-//! alone and the code behind the default (ADR-0064, amendments 2026-10-22
-//! and 2026-11-26), for the library the surfaces load to carry (open
-//! problem 48). The Peppol billing invoice and process are the defaults of
-//! `document` and `process`, so they are declared here, and a transport
-//! carries them from here.
+//! This technology's declaration: the transport guide's "The declaration",
+//! `module/core/capability/transport/doc/adding-a-transport.md`. The Peppol
+//! billing invoice and process are the defaults of `document` and `process`,
+//! so they are declared here, and a transport carries them from here.
 
 use xcore::settings::{Applies, Fixed, Kind, Presence, Setting, Settings};
 
