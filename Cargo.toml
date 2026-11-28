@@ -23,20 +23,20 @@ path = "src/lib.rs"
 # end are not written yet; a static table or a given URL names it. Its
 # declaration takes the capability's `timeout`
 # (`transport::configured::timeout`).
-transport = { package = "xmip-core-transport", git = "https://github.com/IlleNilsson/xmip-core-transport", branch = "main" }
+transport = { workspace = true }
 # The settings this technology declares (xcore::settings), read through
 # transport::Configured (ADR-0064, amendment 2026-09-26).
-xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main" }
+xcore = { workspace = true }
 # XML character data, escaped as every reader in the estate unescapes it.
-codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main", optional = true }
-as4 = { package = "xmip-core-transport-as4", git = "https://github.com/IlleNilsson/xmip-core-transport-as4", branch = "main", optional = true }
+codec = { workspace = true, optional = true }
+as4 = { workspace = true, optional = true }
 # The URL an access point is (`net::Endpoint`), read once for the estate.
-net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main", optional = true }
+net = { workspace = true, optional = true }
 
 [dev-dependencies]
 # The loopback payloads the tests drive, from the capability's test
 # support and never a production build (ADR-0044).
-transport = { package = "xmip-core-transport", git = "https://github.com/IlleNilsson/xmip-core-transport", branch = "main", features = ["test-support"] }
+transport = { workspace = true, features = ["test-support"] }
 
 [lints]
 workspace = true
